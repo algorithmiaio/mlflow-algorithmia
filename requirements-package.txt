@@ -1,0 +1,5 @@
+# These are the library requirements
+mlflow
+algorithmia
+gitpython
+jinja2

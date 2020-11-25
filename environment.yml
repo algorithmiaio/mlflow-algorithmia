@@ -1,0 +1,28 @@
+# Should match requirements.txt
+name: mlflow-algorithmia
+channels:
+  - conda-forge
+dependencies:
+  - python=3.7
+  - pip
+
+  # Base conda deps
+  - setuptools
+  - setuptools_scm
+  - pylint
+  - flake8
+  - black
+  - isort
+  - twine
+  - wheel
+  - pytest
+  - pytest-cov
+
+  # This project pip deps: Examples
+  - scikit-learn
+
+  - pip:
+    # This project pip deps
+    - mlflow
+    - algorithmia
+
