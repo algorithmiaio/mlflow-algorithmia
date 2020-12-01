@@ -112,4 +112,4 @@ _generated_version.py
 ### Project specific ###
 mlruns
 models
-algo_tmp
+algorithmia_tmp
