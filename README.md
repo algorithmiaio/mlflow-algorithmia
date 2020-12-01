@@ -43,14 +43,14 @@ Now let's deploy the same endpoint in Algorithmia. You will need:
 ```
 # Set your Algorithmia API key
 export ALGORITHMIA_USERNAME=<username>
-export ALGORITHMIA_API_KEY=<generated-api-key>
+export ALGORITHMIA_API_KEY=<api-key>
 
 # Create a deployment
 mlflow deployments create -t algorithmia --name mlflow_sklearn_demo -m <path-to-model>
 
 # Test query
 
-curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: text/plain' -H 'Authorization: Simple simkgOvmGdKhVfU7JvbYBCq7Yxu1' https://api.test.algorithmia.com/v1/algo/danielfrg/mlflow_sklearn_demo5?timeout=300
+curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: text/plain' -H 'Authorization: Simple <api-key>' https://api.test.algorithmia.com/v1/algo/danielfrg/mlflow_sklearn_demo5?timeout=300
 ```
 
 To update deployment for example after training a new model
