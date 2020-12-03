@@ -38,7 +38,7 @@ $ curl -X POST -H "Content-Type:application/json; format=pandas-split" --data '{
 
 Now let's deploy the same endpoint in Algorithmia. You will need:
 1. An Algorithmia API key with `Read + Write` data access
-2. The path to the model you want to deploy (under `mlruns`)
+2. The path to the model you want to deploy (under `mlruns`) for example: `mlruns/0/<run-id>/artifacts/model`
 
 ```
 # Set your Algorithmia API key

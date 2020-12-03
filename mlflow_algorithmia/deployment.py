@@ -23,8 +23,9 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 DEPLOYMENT_NAME = "algorithmia"
+
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-TMP_DIR = "./algorithmia_tmp/"
+TMP_DIR = os.environ.get("MLFLOW_ALGO_TMP_DIR", "./algorithmia_tmp/")
 
 
 class AlgorithmiaDeploymentClient(BaseDeploymentClient):
@@ -48,17 +49,64 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
 
     def create_deployment(self, name, model_uri, flavor=None, config=None):
         """
-        Create the project on Algorithmia
+        Create a deployment on the MLflow model in Algorithmia
+        1. Creates and uploads a model bundle
+        2. Creates the source code that uses the bundle
         """
         logger.info("Creating Algorithm %s", name)
         self.settings.update(config)
 
-        username = self.settings["username"]
-        algo_namespace = f"{username}/{name}"
-        print(algo_namespace)
-
         if config and config.get("raiseError") == "True":
             raise RuntimeError("Error requested")
+
+        self.create_algorithm(name)
+
+        self.update_deployment(
+            name=name, model_uri=model_uri, flavor=flavor, config=config
+        )
+        return {"name": DEPLOYMENT_NAME, "flavor": flavor}
+
+    def update_deployment(self, name, model_uri=None, flavor=None, config=None):
+        """
+        Update a model deployment in Algorithmia
+        1. Creates and uploads a new model bundle
+        2. Updates the source code with the bundle
+        """
+        self.read_model_metadata(model_uri)
+
+        os.makedirs(TMP_DIR, exist_ok=True)
+        tar_file = self.create_bundle(model_uri)
+        algo_tar_file = self.upload_bundle(name, tar_file)
+
+        repo_path = self.clone_algorithm_repo(name)
+        config = {
+            "mlflow_bundle_file": algo_tar_file,
+            "dependencies": self.get_deps(model_uri),
+        }
+        self.update_source(name, repo_path, **config)
+
+        self.commit_repo()
+        return {"flavor": flavor}
+
+    def delete_deployment(self, name):
+        return None
+
+    def list_deployments(self):
+        if os.environ.get("raiseError") == "True":
+            raise RuntimeError("Error requested")
+        return [DEPLOYMENT_NAME]
+
+    def get_deployment(self, name):
+        return {"key1": "val1", "key2": "val2"}
+
+    def predict(self, name, df):
+        return 1
+
+    # Util functions
+
+    def create_algorithm(self, name):
+        username = self.settings["username"]
+        algo_namespace = f"{username}/{name}"
 
         details = {
             "label": name,
@@ -76,41 +124,6 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         }
 
         self.client.algo(algo_namespace).create(details=details, settings=settings)
-
-        self.update_deployment(
-            name=name, model_uri=model_uri, flavor=flavor, config=config
-        )
-        return {"name": DEPLOYMENT_NAME, "flavor": flavor}
-
-    def update_deployment(self, name, model_uri=None, flavor=None, config=None):
-        """
-        1. Compress and upload MLflow model
-        2. Update the code to use the new model
-        """
-        self.read_mlmodel(model_uri)
-
-        os.makedirs(TMP_DIR, exist_ok=True)
-        tar_file = self.compress_mlflow(model_uri)
-        algo_tar_file = self.upload_model(name, tar_file)
-
-        repo_path = self.clone_algorithm_repo(name)
-        self.update_source(name, repo_path, mlflow_bundle=algo_tar_file)
-        self.update_repo()
-        return {"flavor": flavor}
-
-    def delete_deployment(self, name):
-        return None
-
-    def list_deployments(self):
-        if os.environ.get("raiseError") == "True":
-            raise RuntimeError("Error requested")
-        return [DEPLOYMENT_NAME]
-
-    def get_deployment(self, name):
-        return {"key1": "val1", "key2": "val2"}
-
-    def predict(self, name, df):
-        return 1
 
     def clone_algorithm_repo(self, name):
         """
@@ -137,7 +150,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
 
         return repo_path
 
-    def update_repo(self):
+    def commit_repo(self):
         print("Updating Algorithmia repo and building model")
         commit_msg = f"Update - MLflow run_id: {self.run_id}"
         self.repo.git.add(".")
@@ -146,9 +159,9 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         origin.push()
         print(f"Updated Algorithmia repo: {commit_msg}")
 
-    def read_mlmodel(self, model_uri):
+    def read_model_metadata(self, model_uri):
         """
-        Read MLmodel file and return it as an object
+        Read MLmodel and conda.yaml file
         """
         mlmodel_path = os.path.join(model_uri, "MLmodel")
         with open(mlmodel_path, "r") as file:
@@ -157,7 +170,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         self.mlmodel = mlmodel
         self.run_id = self.mlmodel["run_id"]
 
-    def compress_mlflow(self, model_uri):
+    def create_bundle(self, model_uri):
         """
         Creates a .tar.gz file from the MLflow model
         """
@@ -169,9 +182,9 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
 
         return tar_fpath
 
-    def upload_model(self, name, tar_fpath):
+    def upload_bundle(self, name, tar_fpath):
         """
-        Upload compress MLflow model to algorithmia
+        Upload MLflow bundle model to algorithmia
         """
         username = self.settings["username"]
         algo_data_dir = f"data://{username}/{name}"
@@ -216,6 +229,47 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         with open(out, "w") as f:
             f.write(output)
 
+    def get_deps(self, model_uri):
+        """
+        Read MLflow conda.yaml and return a list of dependencies
+        """
+        import pkg_resources
+
+        conda_yaml = os.path.join(model_uri, "conda.yaml")
+        with open(conda_yaml, "r") as file:
+            conda_yaml = yaml.load(file, Loader=yaml.FullLoader)
+
+        deps = []
+        ignore_list = ("python", "pip")
+
+        for dep in conda_yaml["dependencies"]:
+            if isinstance(dep, str):
+                # conda dependencies
+                dep = dep.replace("=", "==")
+                requirement = pkg_resources.parse_requirements(dep)
+                requirement = list(requirement)[0]
+                name = requirement.name
+                if name not in ignore_list:
+                    constrain = requirement.specs[0][0]
+                    version = requirement.specs[0][1]
+                    deps.append(f"{name}{constrain}{version}")
+            elif isinstance(dep, dict):
+                # pip dependencies
+                for pip_dep in dep["pip"]:
+                    requirement = pkg_resources.parse_requirements(pip_dep)
+                    requirement = list(requirement)[0]
+                    name = requirement.name
+
+                    if len(requirement.specs) > 0:
+                        constrain = requirement.specs[0][0]
+                        version = requirement.specs[0][1]
+                        deps.append(f"{name}{constrain}{version}")
+                    else:
+                        deps.append(f"{name}")
+
+        print(deps)
+        return deps
+
 
 class Settings(dict):
     def __init__(self):
@@ -229,9 +283,9 @@ class Settings(dict):
         self["summary"] = os.environ.get("ALGORITHN_SUMMARY", "MLflow deployment")
 
         url = urlparse(self["api_endpoint"]).netloc
-        git_endpoint = url[4:] if url.startswith("www.") else url
-        git_endpoint = git_endpoint.replace("api.", "git.")
-        self["git_endpoint"] = git_endpoint
+        url = url[4:] if url.startswith("www.") else url
+        url = url[4:] if url.startswith("api.") else url
+        self["git_endpoint"] = f"git.{url}"
 
 
 class Progress(remote.RemoteProgress):

@@ -1,4 +1,4 @@
 algorithmia>=1.0.0,<2.0
-mlflow
-scikit-learn
-{{ requirements }}
+{% for dep in dependencies -%}
+{{ dep }}
+{% endfor %}
