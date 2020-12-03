@@ -113,3 +113,4 @@ _generated_version.py
 mlruns
 models
 algorithmia_tmp
+*.json

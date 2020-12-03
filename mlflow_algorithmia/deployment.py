@@ -17,12 +17,10 @@ logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.INFO)
 formatter = logging.Formatter(
-    "%(asctime)s - %(levelname)s — %(name)s.%(funcName)s:%(lineno)d — %(message)s"
+    "%(asctime)s - %(levelname)s — %(name)s.%(funcName)s — %(message)s"
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-
-DEPLOYMENT_NAME = "algorithmia"
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TMP_DIR = os.environ.get("MLFLOW_ALGO_TMP_DIR", "./algorithmia_tmp/")
@@ -47,9 +45,9 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
 
         self.client = Algorithmia.client(self.settings["api_key"])
 
-    def create_deployment(self, name, model_uri, flavor=None, config=None):
+    def create_deployment(self, name, model_uri, flavor="python_function", config=None):
         """
-        Create a deployment on the MLflow model in Algorithmia
+        Creates a deployment on the MLflow model in Algorithmia
         1. Creates and uploads a model bundle
         2. Creates the source code that uses the bundle
         """
@@ -60,15 +58,16 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
             raise RuntimeError("Error requested")
 
         self.create_algorithm(name)
-
         self.update_deployment(
             name=name, model_uri=model_uri, flavor=flavor, config=config
         )
-        return {"name": DEPLOYMENT_NAME, "flavor": flavor}
+        return {"name": name, "flavor": flavor}
 
-    def update_deployment(self, name, model_uri=None, flavor=None, config=None):
+    def update_deployment(
+        self, name, model_uri=None, flavor="python_function", config=None
+    ):
         """
-        Update a model deployment in Algorithmia
+        Updates a model deployment in Algorithmia
         1. Creates and uploads a new model bundle
         2. Updates the source code with the bundle
         """
@@ -86,7 +85,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         self.update_source(name, repo_path, **config)
 
         self.commit_repo()
-        return {"flavor": flavor}
+        return {"name": name, "flavor": flavor}
 
     def delete_deployment(self, name):
         return None
@@ -94,17 +93,26 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
     def list_deployments(self):
         if os.environ.get("raiseError") == "True":
             raise RuntimeError("Error requested")
-        return [DEPLOYMENT_NAME]
+        return [name]
 
     def get_deployment(self, name):
         return {"key1": "val1", "key2": "val2"}
 
     def predict(self, name, df):
-        return 1
+        username = self.settings["username"]
+        algo_namespace = f"{username}/{name}"
+        algo = self.client.algo(algo_namespace)
+        import json
+
+        query = json.dumps(df.to_json(orient="split"))
+        algo.pipe("asd")
 
     # Util functions
 
     def create_algorithm(self, name):
+        """
+        Create an algorithm in Algorithmia
+        """
         username = self.settings["username"]
         algo_namespace = f"{username}/{name}"
 
@@ -151,13 +159,13 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         return repo_path
 
     def commit_repo(self):
-        print("Updating Algorithmia repo and building model")
+        logger.info("Updating Algorithmia repo and building model")
         commit_msg = f"Update - MLflow run_id: {self.run_id}"
         self.repo.git.add(".")
         self.repo.index.commit(commit_msg)
         origin = self.repo.remote(name="origin")
         origin.push()
-        print(f"Updated Algorithmia repo: {commit_msg}")
+        logger.info(f"Updated Algorithmia repo: {commit_msg}")
 
     def read_model_metadata(self, model_uri):
         """
@@ -172,7 +180,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
 
     def create_bundle(self, model_uri):
         """
-        Creates a .tar.gz file from the MLflow model
+        Creates a .tar.gz bundle from the MLflow model
         """
         tar_fname = f"model-{self.run_id}.tar.gz"
         tar_fpath = os.path.join(TMP_DIR, tar_fname)
@@ -184,7 +192,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
 
     def upload_bundle(self, name, tar_fpath):
         """
-        Upload MLflow bundle model to algorithmia
+        Upload the MLflow bundle to algorithmia
         """
         username = self.settings["username"]
         algo_data_dir = f"data://{username}/{name}"
@@ -195,7 +203,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         tar_fname = os.path.basename(tar_fpath)
         algo_file = os.path.join(algo_data_dir, tar_fname)
         self.client.file(algo_file).putFile(tar_fpath)
-        print(f"Uploaded MLflow bundle to: {algo_file}")
+        logger.info(f"Uploaded MLflow bundle to: {algo_file}")
         return algo_file
 
     def update_source(self, name, repo_path, **kwargs):
@@ -206,10 +214,10 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         self.render_file("requirements.txt", _, **kwargs)
 
         _ = os.path.join(repo_path, "src", f"{name}.py")
-        self.render_file("main.py", _, **kwargs)
+        self.render_file("entrypoint.py", _, **kwargs)
 
-        _ = os.path.join(repo_path, "src", "algo_utils.py")
-        self.render_file("algo_utils.py", _, **kwargs)
+        _ = os.path.join(repo_path, "src", "algorithmia_utils.py")
+        self.render_file("algorithmia_utils.py", _, **kwargs)
 
         _ = os.path.join(repo_path, "src", "mlflow_wrapper.py")
         self.render_file("mlflow_wrapper.py", _, **kwargs)
@@ -267,7 +275,6 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
                     else:
                         deps.append(f"{name}")
 
-        print(deps)
         return deps
 
 
@@ -285,6 +292,7 @@ class Settings(dict):
         url = urlparse(self["api_endpoint"]).netloc
         url = url[4:] if url.startswith("www.") else url
         url = url[4:] if url.startswith("api.") else url
+        logger.info(url)
         self["git_endpoint"] = f"git.{url}"
 
 
@@ -296,7 +304,7 @@ class Progress(remote.RemoteProgress):
         print(self._cur_line)
 
 
-def run_local(name, model_uri, flavor=None, config=None):
+def run_local(name, model_uri, flavor="python_function", config=None):
     logger.info(
         "Deployed locally at the key {} using the model from {}. ".format(
             name, model_uri

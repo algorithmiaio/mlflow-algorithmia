@@ -38,7 +38,7 @@ $ curl -X POST -H "Content-Type:application/json; format=pandas-split" --data '{
 
 Now let's deploy the same endpoint in Algorithmia. You will need:
 1. An Algorithmia API key with `Read + Write` data access
-2. The path to the model you want to deploy (under `mlruns`) for example: `mlruns/0/<run-id>/artifacts/model`
+2. The path to the model (under `mlruns`) you want to deploy, for example: `mlruns/0/<run-id>/artifacts/model`
 
 ```
 # Set your Algorithmia API key
@@ -47,10 +47,22 @@ export ALGORITHMIA_API_KEY=<api-key>
 
 # Create a deployment
 mlflow deployments create -t algorithmia --name mlflow_sklearn_demo -m <path-to-model>
+```
 
-# Test query
+Query the model in Algorithmia:
+- You need the `<api-key>` and `<username>` and `<version>`
+- Note that if there are no published versions you can use use the latest hash as a `<version>`
 
-curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: text/plain' -H 'Authorization: Simple <api-key>' https://api.test.algorithmia.com/v1/algo/danielfrg/mlflow_sklearn_demo5?timeout=300
+```
+curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: application/json' -H 'Authorization: Simple <api-key>' https://api.algorithmia.com/v1/algo/<username>/mlflow_sklearn_demo/<version>?timeout=300
+```
+
+You can also use `mlflow deployments predict` to query the latest published version of the model:
+
+```
+echo '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' > predict_input.json
+
+mlflow deployments predict -t algorithmia -n mlflow_sklearn_demo -I predict_input.json
 ```
 
 To update deployment for example after training a new model

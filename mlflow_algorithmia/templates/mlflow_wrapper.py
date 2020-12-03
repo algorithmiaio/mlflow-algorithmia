@@ -1,15 +1,14 @@
 import json
 
-import pandas as pd
 import mlflow
 from mlflow import pyfunc
 from mlflow.pyfunc import scoring_server
 from Algorithmia.errors import AlgorithmException
 
 try:
-    from . import algo_utils
+    from . import algorithmia_utils
 except ImportError:
-    import algo_utils
+    import algorithmia_utils
 
 
 class MLflowWrapper(object):
@@ -21,7 +20,7 @@ class MLflowWrapper(object):
 
     def load_model(self, model_fpath):
         if model_fpath.startswith("data://"):
-            model_fpath = algo_utils.get_file(model_fpath)
+            model_fpath = algorithmia_utils.get_file(model_fpath)
 
         self.model = pyfunc.load_model(model_fpath)
 
