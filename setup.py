@@ -25,7 +25,7 @@ setup(
         "mlflow.deployments": "algorithmia=mlflow_algorithmia.deployment",
     },
     options={"bdist_wheel": {"universal": "1"}},
-    python_requires=">=3.7",
+    python_requires=">=3.6",
     setup_requires=["setuptools_scm"],
     install_requires=read_file("requirements-package.txt").splitlines(),
     extras_require={

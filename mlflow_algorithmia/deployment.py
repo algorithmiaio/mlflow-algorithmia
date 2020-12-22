@@ -1,57 +1,43 @@
 import os
 import sys
-import yaml
+import json
+import shutil
 import urllib
 import logging
 import tarfile
 from urllib.parse import urlparse
 
 import Algorithmia
+import ruamel.yaml as yaml
 from git import Git, Repo, remote
 from jinja2 import Environment, FileSystemLoader
 from mlflow.exceptions import MlflowException
 from mlflow.deployments import BaseDeploymentClient
+from Algorithmia.errors import raiseAlgoApiError
+from algorithmia_api_client.rest import ApiException
+
+from mlflow_algorithmia.conda_env import Environment as CondaEnvironment
+
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter(
-    "%(asctime)s - %(levelname)s — %(name)s.%(funcName)s — %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-TMP_DIR = os.environ.get("MLFLOW_ALGO_TMP_DIR", "./algorithmia_tmp/")
+CURDIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class AlgorithmiaDeploymentClient(BaseDeploymentClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.repo = None
         self.run_id = None
         self.mlmodel = None
         self.settings = Settings()
-
-        if self.settings["api_key"] is None:
-            raise MlflowException(
-                "Environment variable: ALGORITHMIA_API_KEY is not set."
-            )
-
-        if self.settings["username"] is None:
-            raise MlflowException(
-                "Environment variable: ALGORITHMIA_USERNAME is not set."
-            )
-
         self.client = Algorithmia.client(self.settings["api_key"])
 
-    def create_deployment(self, name, model_uri, flavor="python_function", config=None):
+    def create_deployment(self, name, model_uri, flavor=None, config=None):
         """
-        Creates a deployment on the MLflow model in Algorithmia
+        Creates a deployment of the MLflow model in Algorithmia
         1. Creates and uploads a model bundle
-        2. Creates the source code that uses the bundle
+        2. Creates the source code
         """
-        logger.info("Creating Algorithm %s", name)
         self.settings.update(config)
 
         if config and config.get("raiseError") == "True":
@@ -61,51 +47,59 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         self.update_deployment(
             name=name, model_uri=model_uri, flavor=flavor, config=config
         )
-        return {"name": name, "flavor": flavor}
+        return {"name": name, "flavor": "Algorithmia"}
 
-    def update_deployment(
-        self, name, model_uri=None, flavor="python_function", config=None
-    ):
+    def update_deployment(self, name, model_uri=None, flavor=None, config=None):
         """
-        Updates a model deployment in Algorithmia
+        Updates a deployment in Algorithmia
         1. Creates and uploads a new model bundle
-        2. Updates the source code with the bundle
+        2. Updates the source code
         """
         self.read_model_metadata(model_uri)
 
-        os.makedirs(TMP_DIR, exist_ok=True)
+        os.makedirs(self.settings["tmp_dir"], exist_ok=True)
         tar_file = self.create_bundle(model_uri)
         algo_tar_file = self.upload_bundle(name, tar_file)
 
-        repo_path = self.clone_algorithm_repo(name)
+        repo_path = self.repo_clone_or_pull(name)
         config = {
             "mlflow_bundle_file": algo_tar_file,
-            "dependencies": self.get_deps(model_uri),
+            "dependencies": self.get_requirements(model_uri),
         }
         self.update_source(name, repo_path, **config)
 
-        self.commit_repo()
-        return {"name": name, "flavor": flavor}
-
-    def delete_deployment(self, name):
-        return None
+        self.repo_commit_and_push()
+        return {"name": name, "flavor": "Algorithmia"}
 
     def list_deployments(self):
-        if os.environ.get("raiseError") == "True":
-            raise RuntimeError("Error requested")
-        return [name]
+        return "To see Algorithmia deployments go to the Algorithmia homepage"
+
+    def delete_deployment(self, name):
+        """
+        Deletes a deployment in algorithmia and removes local
+        temp directory
+        """
+        self.delete_algorithm(name)
+        shutil.rmtree(self.settings["tmp_dir"])
 
     def get_deployment(self, name):
-        return {"key1": "val1", "key2": "val2"}
-
-    def predict(self, name, df):
         username = self.settings["username"]
         algo_namespace = f"{username}/{name}"
         algo = self.client.algo(algo_namespace)
-        import json
+
+        return {
+            "name": algo.algoname,
+            "username": algo.username,
+            "url": algo.url,
+        }
+
+    def predict(self, deployment_name, df):
+        username = self.settings["username"]
+        algo_namespace = f"{username}/{deployment_name}"
+        algo = self.client.algo(algo_namespace)
 
         query = json.dumps(df.to_json(orient="split"))
-        algo.pipe("asd")
+        algo.pipe(query)
 
     # Util functions
 
@@ -113,6 +107,8 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         """
         Create an algorithm in Algorithmia
         """
+        logger.info("Creating Algorithm %s", name)
+
         username = self.settings["username"]
         algo_namespace = f"{username}/{name}"
 
@@ -122,8 +118,6 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
             "tagline": self.settings["tagline"],
         }
         settings = {
-            # "environment": "cpu",
-            # "language": "python3-1",
             "package_set": "python37",
             "source_visibility": "closed",
             "license": "apl",
@@ -132,48 +126,28 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         }
 
         self.client.algo(algo_namespace).create(details=details, settings=settings)
+        logger.info("Algorithm %s created", name)
 
-    def clone_algorithm_repo(self, name):
-        """
-        Clone a repository from Algorithmia if it doesnt exist
-        If its already cloned then pull
-        """
-        os.makedirs(TMP_DIR, exist_ok=True)
-        repo_path = os.path.join(TMP_DIR, name)
-
-        if not os.path.exists(repo_path):
-            # Encoding the API key, so we can use it in the git URL
-
-            username = self.settings["username"]
-            encoded_api_key = urllib.parse.quote_plus(self.settings["api_key"])
-            git_endpoint = self.settings["git_endpoint"]
-            username = self.settings["username"]
-            algo_name = name
-            algo_repo = f"https://{username}:{encoded_api_key}@{git_endpoint}/git/{username}/{algo_name}.git"
-            self.repo = Repo.clone_from(algo_repo, repo_path, progress=Progress())
-        else:
-            self.repo = Repo(repo_path)
-            origin = self.repo.remote(name="origin")
-            origin.pull()
-
-        return repo_path
-
-    def commit_repo(self):
-        logger.info("Updating Algorithmia repo and building model")
-        commit_msg = f"Update - MLflow run_id: {self.run_id}"
-        self.repo.git.add(".")
-        self.repo.index.commit(commit_msg)
-        origin = self.repo.remote(name="origin")
-        origin.push()
-        logger.info(f"Updated Algorithmia repo: {commit_msg}")
+    def delete_algorithm(self, name):
+        """Deletes an algorithm in Algorithmia"""
+        logger.info("Deleting %s deployment in Algorithmia", name)
+        try:
+            api_response = self.client.manageApi.delete_algorithm(
+                self.settings["username"], name
+            )
+            return api_response
+        except ApiException as ex:
+            error_message = json.loads(ex.body)
+            raiseAlgoApiError(error_message)
+        logger.info("Algorithm %s deleted", name)
 
     def read_model_metadata(self, model_uri):
         """
-        Read MLmodel and conda.yaml file
+        Read MLmodel file
         """
         mlmodel_path = os.path.join(model_uri, "MLmodel")
         with open(mlmodel_path, "r") as file:
-            mlmodel = yaml.load(file, Loader=yaml.FullLoader)
+            mlmodel = yaml.load(file, Loader=yaml.Loader)
 
         self.mlmodel = mlmodel
         self.run_id = self.mlmodel["run_id"]
@@ -182,8 +156,9 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         """
         Creates a .tar.gz bundle from the MLflow model
         """
+        logger.info("Creating Mlflow bundle")
         tar_fname = f"model-{self.run_id}.tar.gz"
-        tar_fpath = os.path.join(TMP_DIR, tar_fname)
+        tar_fpath = os.path.join(self.settings["tmp_dir"], tar_fname)
         with tarfile.open(tar_fpath, "w:gz") as tar:
             source_dir = model_uri
             tar.add(source_dir, arcname=tar_fname[: -len(".tar.gz")])
@@ -194,6 +169,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         """
         Upload the MLflow bundle to algorithmia
         """
+        logger.info("Uploading Mlflow bundle")
         username = self.settings["username"]
         algo_data_dir = f"data://{username}/{name}"
 
@@ -203,8 +179,43 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         tar_fname = os.path.basename(tar_fpath)
         algo_file = os.path.join(algo_data_dir, tar_fname)
         self.client.file(algo_file).putFile(tar_fpath)
-        logger.info(f"Uploaded MLflow bundle to: {algo_file}")
+        logger.info("MLflow bundle uploaded to: %s", algo_file)
         return algo_file
+
+    def repo_clone_or_pull(self, name):
+        """
+        Clones a repository from Algorithmia to the temp directory
+        If repo it's already cloned then pulls any changes
+        """
+        target_dir = self.settings["tmp_dir"]
+        logger.info("Cloning algorithm source to: %s", target_dir)
+        os.makedirs(target_dir, exist_ok=True)
+        repo_path = os.path.join(target_dir, name)
+
+        if not os.path.exists(repo_path):
+            username = self.settings["username"]
+            encoded_api_key = self.settings["encoded_api_key"]
+            git_endpoint = self.settings["git_endpoint"]
+            username = self.settings["username"]
+            algo_name = name
+            algo_repo = f"https://{username}:{encoded_api_key}@{git_endpoint}/git/{username}/{algo_name}.git"
+            self.repo = Repo.clone_from(algo_repo, repo_path)
+            # self.repo = Repo.clone_from(algo_repo, repo_path, progress=Progress())
+        else:
+            self.repo = Repo(repo_path)
+            origin = self.repo.remote(name="origin")
+            origin.pull()
+
+        return repo_path
+
+    def repo_commit_and_push(self):
+        logger.info("Updating algorithm source and building model")
+        commit_msg = f"Update - MLflow run_id: {self.run_id}"
+        self.repo.git.add(".")
+        self.repo.index.commit(commit_msg)
+        origin = self.repo.remote(name="origin")
+        origin.push()
+        logger.info("Algorithm repo updated: %s", commit_msg)
 
     def update_source(self, name, repo_path, **kwargs):
         _ = os.path.join(repo_path, ".gitignore")
@@ -229,88 +240,69 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         self.render_file("gitignore_all", _, **kwargs)
 
     def render_file(self, inp, out, **kwargs):
-        file_loader = FileSystemLoader(os.path.join(THIS_DIR, "templates"))
+        file_loader = FileSystemLoader(os.path.join(CURDIR, "templates"))
         env = Environment(loader=file_loader)
         template = env.get_template(inp)
         output = template.render(**kwargs)
 
-        with open(out, "w") as f:
-            f.write(output)
+        with open(out, "w") as file:
+            file.write(output)
 
-    def get_deps(self, model_uri):
+    def get_requirements(self, model_uri):
         """
-        Read MLflow conda.yaml and return a list of dependencies
+        Return a list of requirements based on the MLflow conda.yaml
         """
-        import pkg_resources
-
-        conda_yaml = os.path.join(model_uri, "conda.yaml")
-        with open(conda_yaml, "r") as file:
-            conda_yaml = yaml.load(file, Loader=yaml.FullLoader)
-
-        deps = []
-        ignore_list = ("python", "pip")
-
-        for dep in conda_yaml["dependencies"]:
-            if isinstance(dep, str):
-                # conda dependencies
-                dep = dep.replace("=", "==")
-                requirement = pkg_resources.parse_requirements(dep)
-                requirement = list(requirement)[0]
-                name = requirement.name
-                if name not in ignore_list:
-                    constrain = requirement.specs[0][0]
-                    version = requirement.specs[0][1]
-                    deps.append(f"{name}{constrain}{version}")
-            elif isinstance(dep, dict):
-                # pip dependencies
-                for pip_dep in dep["pip"]:
-                    requirement = pkg_resources.parse_requirements(pip_dep)
-                    requirement = list(requirement)[0]
-                    name = requirement.name
-
-                    if len(requirement.specs) > 0:
-                        constrain = requirement.specs[0][0]
-                        version = requirement.specs[0][1]
-                        deps.append(f"{name}{constrain}{version}")
-                    else:
-                        deps.append(f"{name}")
-
-        return deps
+        conda_yaml_path = os.path.join(model_uri, "conda.yaml")
+        environemnt = CondaEnvironment.from_file(conda_yaml_path)
+        return environemnt.list_deps()
 
 
 class Settings(dict):
     def __init__(self):
         super().__init__()
-        self["api_endpoint"] = os.environ.get(
-            "ALGORITHMIA_API", "https://api.algorithmia.com"
-        )
         self["api_key"] = os.environ.get("ALGORITHMIA_API_KEY", None)
         self["username"] = os.environ.get("ALGORITHMIA_USERNAME", None)
-        self["tagline"] = os.environ.get("ALGORITHM_TAGLINE", "Mlflow deployment")
-        self["summary"] = os.environ.get("ALGORITHN_SUMMARY", "MLflow deployment")
 
+        if self["api_key"] is None:
+            raise MlflowException(
+                "Environment variable ALGORITHMIA_API_KEY is not set."
+            )
+
+        if self["username"] is None:
+            raise MlflowException(
+                "Environment variable ALGORITHMIA_USERNAME is not set."
+            )
+
+        default_api = "https://api.algorithmia.com"
+        self["api_endpoint"] = os.environ.get("ALGORITHMIA_API", default_api)
+        # Encoding the API key, so we can use it in the git URL
+        self["encoded_api_key"] = urllib.parse.quote_plus(self["api_key"])
+        self["tagline"] = os.environ.get("ALGORITHM_TAGLINE", "Mlflow deployment")
+        self["summary"] = os.environ.get("ALGORITHM_SUMMARY", "Mlflow deployment")
+
+        # Make the git_endpoint from the Algorithmia API
         url = urlparse(self["api_endpoint"]).netloc
         url = url[4:] if url.startswith("www.") else url
         url = url[4:] if url.startswith("api.") else url
-        logger.info(url)
-        self["git_endpoint"] = f"git.{url}"
+        default_git_endpoint = f"git.{url}"
+        self["git_endpoint"] = os.environ.get(
+            "ALGORITHMIA_GIT_ENDPOINT", default_git_endpoint
+        )
+
+        default_tmp_dir = "./algorithmia_tmp/"
+        self["tmp_dir"] = os.environ.get("MLFLOW_ALGO_TMP_DIR", default_tmp_dir)
 
 
 class Progress(remote.RemoteProgress):
     def line_dropped(self, line):
         print(line)
 
-    def update(self, *args):
+    def update(self, op_code, cur_count, max_count=None, message=""):
         print(self._cur_line)
 
 
-def run_local(name, model_uri, flavor="python_function", config=None):
-    logger.info(
-        "Deployed locally at the key {} using the model from {}. ".format(
-            name, model_uri
-        )
-        + "It's flavor is {} and config is {}".format(flavor, config)
-    )
+def run_local(name, model_uri, flavor=None, config=None):
+    logger.info("Use `mlflow models serve` to run this model locally")
 
 
 def target_help():

@@ -1,0 +1,9 @@
+name: Test project
+conda_env: conda-complex.yaml
+
+entry_points:
+  main:
+    parameters:
+      alpha: {type: float, default: 0.1}
+      l1_ratio: {type: float, default: 0.1}
+    command: "python train.py {alpha} {l1_ratio}"

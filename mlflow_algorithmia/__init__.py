@@ -12,9 +12,18 @@ except ImportError:
             """
             from setuptools_scm.git import parse
 
-            kwargs["describe_command"] = "git describe --dirty --tags --long --match '*[0-9]*'"
+            kwargs[
+                "describe_command"
+            ] = "git describe --dirty --tags --long --match '*[0-9]*'"
             return parse(root, **kwargs)
 
         __version__ = setuptools_scm.get_version("./", parse=parse_git)
     except ImportError:
         __version__ = None
+
+
+import sys
+import logging
+
+format = "%(levelname)s: %(message)s"
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=format)

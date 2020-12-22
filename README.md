@@ -46,27 +46,33 @@ export ALGORITHMIA_USERNAME=<username>
 export ALGORITHMIA_API_KEY=<api-key>
 
 # Create a deployment
-mlflow deployments create -t algorithmia --name mlflow_sklearn_demo -m <path-to-model>
+mlflow deployments create -t algorithmia --name mlflow_sklearn_demo -m <path-to-model-dir>
 ```
 
 Query the model in Algorithmia:
-- You need the `<api-key>` and `<username>` and `<version>`
-- Note that if there are no published versions you can use use the latest hash as a `<version>`
+- You need the `ALGORITHMIA_USERNAME` and `ALGORITHMIA_API_KEY` variables from before and the `<version>` you want to query
+- Note that if there are no published versions need to use a build hash as `<version>`
 
 ```
-curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: application/json' -H 'Authorization: Simple <api-key>' https://api.algorithmia.com/v1/algo/<username>/mlflow_sklearn_demo/<version>?timeout=300
+curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: application/json' -H 'Authorization: Simple '${ALGORITHMIA_API_KEY} https://api.algorithmia.com/v1/algo/${ALGORITHMIA_USERNAME}/mlflow_sklearn_demo/<version>
 ```
 
-You can also use `mlflow deployments predict` to query the latest published version of the model:
+You can also use `mlflow deployments predict` to query the model, on this case it will always query the latest published version of the model.
 
 ```
-echo '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' > predict_input.json
+echo '{"alcohol":{"0":12.8},"chlorides":{"0":0.029},"citric acid":{"0":0.48},"density":{"0":0.98},"fixed acidity":{"0":6.2},"free sulfur dioxide":{"0":29},"pH":{"0":3.33},"residual sugar":{"0":1.2},"sulphates":{"0":0.39},"total sulfur dioxide":{"0":75},"volatile acidity":{"0":0.66}}' > predict_input.json
 
-mlflow deployments predict -t algorithmia -n mlflow_sklearn_demo -I predict_input.json
+mlflow deployments predict -t algorithmia --name mlflow_sklearn_demo -I predict_input.json
 ```
 
 To update deployment for example after training a new model
 
 ```
-mlflow deployments update -t algorithmia --name mlflow_sklearn_demo -m <path-to-new-model>
+mlflow deployments update -t algorithmia --name mlflow_sklearn_demo -m <path-to-new-model-dir>
+```
+
+To delete the deployment
+
+```
+mlflow deployments delete -t algorithmia --name mlflow_sklearn_demo
 ```

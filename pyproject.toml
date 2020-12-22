@@ -4,6 +4,12 @@ requires = ["setuptools", "setuptools_scm", "wheel"]
 [tool.setuptools_scm]
 write_to = "mlflow_algorithmia/_generated_version.py"
 
+
+[tool.pytest.ini_options]
+norecursedirs = ".git,dist,build,env,venv"
+addopts = "mlflow_algorithmia/tests -s -vv --cov-config=pyproject.toml --cov=mlflow_algorithmia --cov-report term"
+
+
 [tool.coverage.run]
 parallel = true
 branch = true
