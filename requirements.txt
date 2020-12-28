@@ -15,6 +15,7 @@ pytest-cov
 # Package deps
 mlflow
 algorithmia
+requests
 ruamel.yaml
 gitpython
 jinja2

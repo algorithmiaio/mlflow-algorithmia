@@ -7,6 +7,7 @@ import logging
 import tarfile
 from urllib.parse import urlparse
 
+import requests
 import Algorithmia
 import ruamel.yaml as yaml
 from git import Git, Repo, remote
@@ -27,6 +28,7 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.repo = None
+        self.algo = None
         self.run_id = None
         self.mlmodel = None
         self.settings = Settings()
@@ -69,6 +71,9 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         self.update_source(name, repo_path, **config)
 
         self.repo_commit_and_push()
+
+        version = self.get_builds(name)[0]["commit_sha"]
+        logger.info("New model version ready: %s", version)
         return {"name": name, "flavor": "Algorithmia"}
 
     def list_deployments(self):
@@ -109,9 +114,6 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         """
         logger.info("Creating Algorithm %s", name)
 
-        username = self.settings["username"]
-        algo_namespace = f"{username}/{name}"
-
         details = {
             "label": name,
             "summary": self.settings["summary"],
@@ -125,8 +127,26 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
             "pipeline_enabled": True,
         }
 
-        self.client.algo(algo_namespace).create(details=details, settings=settings)
+        self.algo_(name).create(details=details, settings=settings)
         logger.info("Algorithm %s created", name)
+
+    def algo_(self, name):
+        """
+        Internal representation for the algorithmia algorithm
+        """
+        username = self.settings["username"]
+        algo_namespace = f"{username}/{name}"
+        return self.client.algo(algo_namespace)
+
+    def get_builds(self, name):
+        api = self.settings["api_endpoint"]
+        username = self.settings["username"]
+        url = f"{api}/v1/algorithms/{username}/{name}/builds"
+
+        api_key = self.settings["api_key"]
+        headers = {"Authorization": f"Simple {api_key}"}
+        r = requests.get(url, headers=headers)
+        return r.json()["results"]
 
     def delete_algorithm(self, name):
         """Deletes an algorithm in Algorithmia"""

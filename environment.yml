@@ -25,6 +25,7 @@ dependencies:
     # Package deps
     - mlflow
     - algorithmia
+    - requests
     - ruamel.yaml
     - gitpython
     - jinja2
