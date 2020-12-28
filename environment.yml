@@ -6,7 +6,7 @@ dependencies:
   - python=3.7
   - pip
 
-  # Base conda deps
+  # Development deps
   - setuptools
   - setuptools_scm
   - pylint
@@ -18,11 +18,13 @@ dependencies:
   - pytest
   - pytest-cov
 
-  # This project pip deps: Examples
+  # Examples
   - scikit-learn
 
   - pip:
-    # This project pip deps
+    # Package deps
     - mlflow
     - algorithmia
-
+    - ruamel.yaml
+    - gitpython
+    - jinja2
