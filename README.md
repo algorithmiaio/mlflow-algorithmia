@@ -89,7 +89,7 @@ First create a `predict_input.json` file:
 echo '{"alcohol":{"0":12.8},"chlorides":{"0":0.029},"citric acid":{"0":0.48},"density":{"0":0.98},"fixed acidity":{"0":6.2},"free sulfur dioxide":{"0":29},"pH":{"0":3.33},"residual sugar":{"0":1.2},"sulphates":{"0":0.39},"total sulfur dioxide":{"0":75},"volatile acidity":{"0":0.66}}' > predict_input.json
 ```
 
-Now query the latest published version of the model:
+Now query the latest public published version of the model:
 
 ```
 mlflow deployments predict -t algorithmia --name mlflow_sklearn_demo -I predict_input.json

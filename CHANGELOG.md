@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.1.2]
+
+- Fix mlflow predict command serialization
+
 ## [0.1.1]
 
 - Pin to newer dependencies of mlflow and algorithmia

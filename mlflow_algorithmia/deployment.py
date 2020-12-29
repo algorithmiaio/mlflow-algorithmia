@@ -103,8 +103,8 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         algo_namespace = f"{username}/{deployment_name}"
         algo = self.client.algo(algo_namespace)
 
-        query = json.dumps(df.to_json(orient="split"))
-        algo.pipe(query)
+        query = df.to_json(orient="split")
+        return algo.pipe(query).result
 
     # Util functions
 
