@@ -1,8 +1,8 @@
 # mlflow-algorithmia
 
 [![PyPI](https://badge.fury.io/py/mlflow-algorithmia.svg)](https://pypi.org/project/mlflow-algorithmia/)
-[![Testing](https://github.com/algorithmia/mlflow-algorithmia/workflows/test/badge.svg)](https://github.com/algorithmia/mlflow-algorithmia/actions)
-[![License](http://img.shields.io/:license-Apache%202-blue.svg)](https://github.com/algorithmia/mlflow-algorithmia/blob/master/LICENSE.txt)
+[![Testing](https://github.com/algorithmiaio/mlflow-algorithmia/workflows/test/badge.svg)](https://github.com/algorithmiaio/mlflow-algorithmia/actions)
+[![License](http://img.shields.io/:license-Apache%202-blue.svg)](https://github.com/algorithmiaio/mlflow-algorithmia/blob/master/LICENSE.txt)
 
 Deploy MLflow models to Algorithmia
 
