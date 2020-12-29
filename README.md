@@ -75,11 +75,13 @@ Save the new model version from the output to query the model.
 
 You need the new model version from above and the `ALGORITHMIA_USERNAME` and `ALGORITHMIA_API_KEY` variables you used before.
 
+Replace `<version>` with the model version from the previous command output.
+
 ```
 curl -X POST -d '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' -H 'Content-Type: application/json' -H 'Authorization: Simple '${ALGORITHMIA_API_KEY} https://api.algorithmia.com/v1/algo/${ALGORITHMIA_USERNAME}/mlflow_sklearn_demo/<version>
 ```
 
-You can also use `mlflow deployments predict` command to query the model, on this case it will always query the **latest published** version of the model, to query specific versions use the method described above.
+You can also use `mlflow deployments predict` command to query the model, on this case it will always query the **latest public published** version of the model, to query a specific version use the method described above.
 
 First create a `predict_input.json` file:
 
