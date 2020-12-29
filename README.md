@@ -9,8 +9,6 @@ Deploy MLflow models to Algorithmia
 ## Install
 
 ```
-pip install git+git://github.com/algorithmia/mlflow-algorithmia.git
-
 pip install mlflow-algorithmia
 ```
 
