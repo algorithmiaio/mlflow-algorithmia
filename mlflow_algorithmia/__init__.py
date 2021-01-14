@@ -22,8 +22,9 @@ except ImportError:
         __version__ = None
 
 
-import sys
 import logging
+import sys
+
 
 format = "%(levelname)s: %(message)s"
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=format)

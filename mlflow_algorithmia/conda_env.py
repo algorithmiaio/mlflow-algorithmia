@@ -3,11 +3,11 @@
 # and we dont have to add a dependency on conda itself
 
 import re
-import pkg_resources
 from collections import OrderedDict
-from pip._vendor.packaging.utils import canonicalize_name, canonicalize_version
 
+import pkg_resources
 import ruamel.yaml as yaml
+from pip._vendor.packaging.utils import canonicalize_name, canonicalize_version
 
 
 def yaml_safe_load(string):

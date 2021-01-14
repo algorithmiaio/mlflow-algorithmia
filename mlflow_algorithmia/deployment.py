@@ -1,21 +1,21 @@
-import os
-import sys
 import json
-import shutil
-import urllib
 import logging
+import os
+import shutil
+import sys
 import tarfile
+import urllib
 from urllib.parse import urlparse
 
-import requests
 import Algorithmia
+import requests
 import ruamel.yaml as yaml
-from git import Git, Repo, remote
-from jinja2 import Environment, FileSystemLoader
-from mlflow.exceptions import MlflowException
-from mlflow.deployments import BaseDeploymentClient
 from Algorithmia.errors import raiseAlgoApiError
 from algorithmia_api_client.rest import ApiException
+from git import Git, Repo, remote
+from jinja2 import Environment, FileSystemLoader
+from mlflow.deployments import BaseDeploymentClient
+from mlflow.exceptions import MlflowException
 
 from mlflow_algorithmia.conda_env import Environment as CondaEnvironment
 
