@@ -84,8 +84,9 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         Deletes a deployment in algorithmia and removes local
         temp directory
         """
+        if os.path.exists(self.settings["tmp_dir"]):
+            shutil.rmtree(self.settings["tmp_dir"])
         self.delete_algorithm(name)
-        shutil.rmtree(self.settings["tmp_dir"])
 
     def get_deployment(self, name):
         username = self.settings["username"]
