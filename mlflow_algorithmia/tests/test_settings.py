@@ -1,6 +1,6 @@
 import pytest
-
 from mlflow.exceptions import MlflowException
+
 from mlflow_algorithmia.deployment import Settings
 
 

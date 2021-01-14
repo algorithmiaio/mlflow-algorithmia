@@ -1,9 +1,10 @@
 import json
 
 import mlflow
+from Algorithmia.errors import AlgorithmException
 from mlflow import pyfunc
 from mlflow.pyfunc import scoring_server
-from Algorithmia.errors import AlgorithmException
+
 
 try:
     from . import algorithmia_utils
