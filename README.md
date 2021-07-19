@@ -1,7 +1,6 @@
 # mlflow-algorithmia
 
 [![PyPI](https://badge.fury.io/py/mlflow-algorithmia.svg)](https://pypi.org/project/mlflow-algorithmia/)
-[![Testing](https://github.com/algorithmiaio/mlflow-algorithmia/workflows/test/badge.svg)](https://github.com/algorithmiaio/mlflow-algorithmia/actions)
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](https://github.com/algorithmiaio/mlflow-algorithmia/blob/master/LICENSE.txt)
 
 Deploy MLflow models to Algorithmia
@@ -20,7 +19,7 @@ we reproduce some steps here but for more details please see the official [mlflo
 Create a model by running this script:
 
 ```
-python examples/sklearn_elasticnet_wine/train.py
+mlflow run examples/sklearn_elasticnet_wine/
 ```
 
 This will create an `mlruns` directory that contains the trained model,
@@ -28,13 +27,13 @@ you can run the mlflow UI running `mlflow ui` or serve the model locally using t
 mlflow server running:
 
 ```
-$ mlflow models serve -m mlruns/0/<run-id>/artifacts/model -p 1234
+mlflow models serve -m mlruns/0/<run-id>/artifacts/model -p 1234
 ```
 
 And make a test query
 
 ```
-$ curl -X POST -H "Content-Type:application/json; format=pandas-split" --data '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' http://127.0.0.1:1234/invocations
+curl -X POST -H "Content-Type:application/json; format=pandas-split" --data '{"columns":["alcohol", "chlorides", "citric acid", "density", "fixed acidity", "free sulfur dioxide", "pH", "residual sugar", "sulphates", "total sulfur dioxide", "volatile acidity"],"data":[[12.8, 0.029, 0.48, 0.98, 6.2, 29, 3.33, 1.2, 0.39, 75, 0.66]]}' http://127.0.0.1:1234/invocations
 
 [5.120775719594933]
 ```
