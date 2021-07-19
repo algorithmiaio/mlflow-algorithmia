@@ -120,8 +120,10 @@ A complete list of variables and its defaults:
 
 | Variable  | Default | Description |
 | --- | --- | --- |
-| `ALGO_PACKAGE_SET` | `python37` | Package set |
+| `ALGO_LANGUAGE` | `python3` | Package set |
+| `ALGO_ENV_ID` | `` | Defaults to the Python 3.8 environment ID found on the cluster |
 | `ALGO_SRC_VISIBILITY` | `closed` | Algorithm source visibility `closed` or `open` |
 | `ALGO_LICENSE` | `apl` | Algorithm license |
 | `ALGO_NETWORK_ACCESS` | `full` | Network Access |
 | `ALGO_PIPELINE` | `True` | Algorithm pipeline enabled or not |
+| `ALGO_PACKAGE_SET` |  | Optional legacy environment package set name |

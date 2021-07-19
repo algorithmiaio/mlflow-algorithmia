@@ -115,13 +115,23 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
         """
         logger.info("Creating Algorithm %s", name)
 
+        environment_id = self.settings["environment_id"]
+
+        if environment_id is None:
+
+            response = self.client.get_environment(self.settings["language"])
+            for environment in response['environments']:
+                if environment['display_name'] == 'Python 3.8':
+                    environment_id = environment['id']
+
         details = {
             "label": name,
             "summary": self.settings["summary"],
             "tagline": self.settings["tagline"],
         }
         settings = {
-            "package_set": self.settings["package_set"],
+            # "package_set": self.settings["package_set"],
+            "algorithm_environment": environment_id,
             "source_visibility": self.settings["source_visibility"],
             "license": self.settings["license"],
             "network_access": self.settings["network_access"],
@@ -314,6 +324,8 @@ class Settings(dict):
         self["tmp_dir"] = os.environ.get("MLFLOW_ALGO_TMP_DIR", default_tmp_dir)
 
         self["package_set"] = os.environ.get("ALGO_PACKAGE_SET", "python37")
+        self["language"] = os.environ.get("ALGO_LANGUAGE", "python3")
+        self["environment_id"] = os.environ.get("ALGO_ENV_ID", None)
         self["source_visibility"] = os.environ.get("ALGO_SRC_VISIBILITY", "closed")
         self["license"] = os.environ.get("ALGO_LICENSE", "apl")
         self["network_access"] = os.environ.get("ALGO_NETWORK_ACCESS", "full")
