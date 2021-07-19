@@ -104,3 +104,25 @@ To delete the deployment:
 ```
 mlflow deployments delete -t algorithmia --name mlflow_sklearn_demo
 ```
+
+## Algorithm settings
+
+To control the different algorithm specific deployment options such as the
+algorithmia environment using environment variables. For example:
+
+```
+export ALGO_PACKAGE_SET=python38
+mlflow deployments create -t algorithmia --name mlflow_sklearn_demo -m mlruns/0/<run-id>/artifacts/model
+```
+
+Will create an algorithm with the Package Set Python 3.8 instead of the default of 3.7.
+
+A complete list of variables and its defaults:
+
+| Variable  | Default | Description |
+| --- | --- | --- |
+| `ALGO_PACKAGE_SET` | `python37` | Package set |
+| `ALGO_SRC_VISIBILITY` | `closed` | Algorithm source visibility `closed` or `open` |
+| `ALGO_LICENSE` | `apl` | Algorithm license |
+| `ALGO_NETWORK_ACCESS` | `full` | Network Access |
+| `ALGO_PIPELINE` | `True` | Algorithm pipeline enabled or not |

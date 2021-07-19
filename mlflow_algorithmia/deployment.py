@@ -121,11 +121,11 @@ class AlgorithmiaDeploymentClient(BaseDeploymentClient):
             "tagline": self.settings["tagline"],
         }
         settings = {
-            "package_set": "python37",
-            "source_visibility": "closed",
-            "license": "apl",
-            "network_access": "full",
-            "pipeline_enabled": True,
+            "package_set": self.settings["package_set"],
+            "source_visibility": self.settings["source_visibility"],
+            "license": self.settings["license"],
+            "network_access": self.settings["network_access"],
+            "pipeline_enabled": self.settings["pipeline_enabled"],
         }
 
         self.algo_(name).create(details=details, settings=settings)
@@ -313,6 +313,11 @@ class Settings(dict):
         default_tmp_dir = "./algorithmia_tmp/"
         self["tmp_dir"] = os.environ.get("MLFLOW_ALGO_TMP_DIR", default_tmp_dir)
 
+        self["package_set"] = os.environ.get("ALGO_PACKAGE_SET", "python37")
+        self["source_visibility"] = os.environ.get("ALGO_SRC_VISIBILITY", "closed")
+        self["license"] = os.environ.get("ALGO_LICENSE", "apl")
+        self["network_access"] = os.environ.get("ALGO_NETWORK_ACCESS", "full")
+        self["pipeline_enabled"] = os.environ.get("ALGO_PIPELINE", True)
 
 class Progress(remote.RemoteProgress):
     def line_dropped(self, line):
